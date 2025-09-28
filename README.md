@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Screenshot Compare for PMs
 
-## Getting Started
+Stop manually explaining product changes. Upload two screenshots, get instant AI analysis.
 
-First, run the development server:
+## The Problem We're Solving
+
+PMs spend way too much time writing up competitor changes, A/B test results, and demo explanations. You take screenshots, then manually write bullets about what changed. It's slow, you miss stuff, and honestly pretty boring work.
+
+This tool does that work for you. Upload before/after screenshots → get clear change analysis → spend time on strategy instead.
+
+## Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+git clone <repo-url>
+cd my-app
+pnpm install
+
+# Add your OpenAI key
+echo "OPENAI_API_KEY=your_key_here" > .env.local
+
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 → drag two screenshots → done.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How It Works
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Super simple flow:
+1. Upload screenshot A (before)
+2. Upload screenshot B (after)
+3. AI finds the differences
+4. Get max 5 bullet points + "so what does this mean"
+5. Save to your history with thumbs up/down feedback
 
-## Learn More
+Perfect for:
+- Competitor tracking (they changed their pricing page again...)
+- A/B test readouts (variant B converted better, here's why)
+- Product demos (showing stakeholders what shipped)
 
-To learn more about Next.js, take a look at the following resources:
+## What We Built (P1 MVP)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This is the thinnest possible slice that's actually useful:
+- One user, no accounts needed
+- Exactly 2 screenshots per comparison
+- AI generates one report per pair
+- Simple history (no fancy organization)
+- Useful/not useful feedback
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Next up**: Timeline view, multiple screenshots per product, Chrome extension.
 
-## Deploy on Vercel
+## Tech Details
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Next.js 15 + React 19 + TypeScript
+- OpenAI GPT-4o for image analysis
+- shadcn/ui components + Tailwind
+- localStorage (no database complexity)
+- pnpm only
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm dev          # Start with Turbopack
+pnpm tsc --noEmit # Type check before committing
+pnpm lint         # Keep it clean
+```
+
+## Success Metrics
+
+- Under 60 seconds from upload to report
+- 50%+ reports marked useful
+- 5+ PMs using it regularly
+
+We're optimizing for speed and usefulness over perfection.
