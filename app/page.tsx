@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload, History, Zap } from "lucide-react";
 
 export default function Home() {
@@ -32,7 +32,7 @@ export default function Home() {
               <Zap className="h-10 w-10 text-primary mb-2" />
               <CardTitle>AI Insights</CardTitle>
               <CardDescription>
-                Get ≤5 key changes plus "so what" implications automatically
+                Get ≤5 key changes plus &ldquo;so what&rdquo; implications automatically
               </CardDescription>
             </CardHeader>
           </Card>

@@ -5,28 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, ThumbsUp, ThumbsDown, Upload, History } from "lucide-react";
+import { ArrowLeft, ThumbsUp, ThumbsDown, Upload, History, Clock, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ComparisonResult } from "@/lib/types";
+import { TimelineStorage } from "@/lib/timeline-storage";
 
-interface ComparisonResult {
-  id: string;
-  imageA: {
-    name: string;
-    data: string;
-    type: string;
-  };
-  imageB: {
-    name: string;
-    data: string;
-    type: string;
-  };
-  comparison: {
-    changes: string[];
-    implication: string;
-  };
-  timestamp: string;
-  feedback?: 'useful' | 'not-useful';
-}
 
 export default function ReportPage() {
   const params = useParams();
@@ -34,6 +17,7 @@ export default function ReportPage() {
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<'useful' | 'not-useful' | null>(null);
+  const [isCreatingTimeline, setIsCreatingTimeline] = useState(false);
 
   useEffect(() => {
     // In a real app, this would fetch from an API
@@ -62,6 +46,68 @@ export default function ReportPage() {
 
     // In a real app, you'd also send this to your backend
     console.log(`Feedback for ${params.id}: ${type}`);
+  };
+
+  const handleCreateTimeline = async () => {
+    if (!result) {
+      console.error('No comparison result available');
+      alert('No comparison data available. Please try refreshing the page.');
+      return;
+    }
+
+    console.log('Starting timeline creation for comparison:', result.id);
+    setIsCreatingTimeline(true);
+
+    try {
+      // Validate that we have the minimum required data
+      if (!result.id || !result.imageA || !result.imageB) {
+        throw new Error('Incomplete comparison data: missing ID or images');
+      }
+
+      if (!result.imageA.name || !result.imageA.data || !result.imageB.name || !result.imageB.data) {
+        throw new Error('Incomplete image data: missing names or data');
+      }
+
+      console.log('Validation passed, creating timeline...');
+
+      const timeline = await TimelineStorage.convertComparisonToTimeline(
+        result.id,
+        `Timeline from ${result.imageA.name}`
+      );
+
+      if (!timeline) {
+        throw new Error('Timeline creation failed: convertComparisonToTimeline returned null');
+      }
+
+      console.log('Timeline created successfully:', timeline.id);
+      console.log('Navigating to timeline page...');
+
+      router.push(`/timeline/${timeline.id}`);
+    } catch (error) {
+      console.error('Error creating timeline:', error);
+
+      // Provide more specific error messages
+      let errorMessage = 'Failed to create timeline. ';
+      if (error instanceof Error) {
+        if (error.message.includes('Storage quota exceeded')) {
+          errorMessage = 'Storage space is full! Please go to the History page and delete some old comparisons or timelines to free up space, then try again.';
+        } else if (error.message.includes('missing')) {
+          errorMessage += 'The comparison data appears to be incomplete. Please try creating a new comparison first.';
+        } else if (error.message.includes('localStorage')) {
+          errorMessage += 'There was an issue accessing saved data. Please check browser storage permissions.';
+        } else if (error.message.includes('compression')) {
+          errorMessage += 'Failed to process the images. This comparison might have very large images.';
+        } else {
+          errorMessage += error.message;
+        }
+      } else {
+        errorMessage += 'Please try again.';
+      }
+
+      alert(errorMessage);
+    } finally {
+      setIsCreatingTimeline(false);
+    }
   };
 
   if (loading) {
@@ -116,7 +162,7 @@ export default function ReportPage() {
             </CardHeader>
             <CardContent>
               <img
-                src={`data:${result.imageA.type};base64,${result.imageA.data}`}
+                src={result.imageA.data.startsWith('data:') ? result.imageA.data : `data:${result.imageA.type};base64,${result.imageA.data}`}
                 alt="Screenshot A"
                 className="w-full rounded-lg border"
               />
@@ -130,7 +176,7 @@ export default function ReportPage() {
             </CardHeader>
             <CardContent>
               <img
-                src={`data:${result.imageB.type};base64,${result.imageB.data}`}
+                src={result.imageB.data.startsWith('data:') ? result.imageB.data : `data:${result.imageB.type};base64,${result.imageB.data}`}
                 alt="Screenshot B"
                 className="w-full rounded-lg border"
               />
@@ -206,6 +252,47 @@ export default function ReportPage() {
                 Thank you for your feedback!
               </p>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Timeline Creation */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Continue This Comparison
+            </CardTitle>
+            <CardDescription>
+              Turn this comparison into a timeline to track changes over time
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium mb-1">Create Timeline</p>
+                <p className="text-sm text-muted-foreground">
+                  Start tracking the evolution of this interface by creating a timeline.
+                  You can then add more screenshots to see how it changes over time.
+                </p>
+              </div>
+              <Button
+                onClick={handleCreateTimeline}
+                disabled={isCreatingTimeline}
+                className="ml-4"
+              >
+                {isCreatingTimeline ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Timeline
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

@@ -25,28 +25,45 @@ Open http://localhost:3000 → drag two screenshots → done.
 
 ## How It Works
 
-Super simple flow:
+**Single Comparison Flow:**
 1. Upload screenshot A (before)
 2. Upload screenshot B (after)
 3. AI finds the differences
 4. Get max 5 bullet points + "so what does this mean"
 5. Save to your history with thumbs up/down feedback
 
+**Timeline Flow:**
+1. Start with a 2-screenshot comparison
+2. Convert to timeline (or start fresh)
+3. Add new screenshots one at a time
+4. AI compares each to the previous state
+5. View progression with strategic insights
+
 Perfect for:
-- Competitor tracking (they changed their pricing page again...)
-- A/B test readouts (variant B converted better, here's why)
-- Product demos (showing stakeholders what shipped)
+- Competitor tracking (monitor their pricing page evolution)
+- A/B test readouts (see what changed between variants)
+- Product demos (show stakeholders the journey)
+- Feature rollouts (track UI changes over sprints)
 
-## What We Built (P1 MVP)
+## What We Built
 
-This is the thinnest possible slice that's actually useful:
+**Single Comparisons** (P1 MVP):
 - One user, no accounts needed
-- Exactly 2 screenshots per comparison
-- AI generates one report per pair
-- Simple history (no fancy organization)
+- Upload 2 screenshots for side-by-side comparison
+- AI generates one report per pair (max 5 changes + "so what")
+- Simple history with thumbnails
 - Useful/not useful feedback
 
-**Next up**: Timeline view, multiple screenshots per product, Chrome extension.
+**Timeline Feature** (Now Live):
+- Track UI evolution with multiple screenshots in sequence
+- Add screenshots one-by-one to build a progression
+- AI analyzes each addition vs. previous state
+- Strategic view of how changes fit overall direction
+- Navigate through timeline with thumbnails
+- Automatic image compression (~400KB per screenshot)
+- localStorage-based persistence (4MB auto-cleanup)
+
+**Next up**: Chrome extension, batch uploads, export reports.
 
 ## Tech Details
 

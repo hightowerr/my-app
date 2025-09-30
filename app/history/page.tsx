@@ -4,54 +4,23 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Upload, Eye, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ArrowLeft, Upload, Eye, ThumbsUp, ThumbsDown, Clock, Play } from "lucide-react";
 
-interface ComparisonResult {
-  id: string;
-  imageA: {
-    name: string;
-    data: string;
-    type: string;
-  };
-  imageB: {
-    name: string;
-    data: string;
-    type: string;
-  };
-  comparison: {
-    changes: string[];
-    implication: string;
-  };
-  timestamp: string;
-  feedback?: 'useful' | 'not-useful';
-}
+import { StorageItem, isTimelineComparison, isComparisonResult } from "@/lib/types";
+import { TimelineStorage } from "@/lib/timeline-storage";
 
 export default function HistoryPage() {
-  const [comparisons, setComparisons] = useState<ComparisonResult[]>([]);
+  const [items, setItems] = useState<StorageItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load all comparisons from localStorage
-    const loadComparisons = () => {
-      const allKeys = Object.keys(localStorage);
-      const comparisonKeys = allKeys.filter(key => key.startsWith('comparison-'));
-
-      const loadedComparisons = comparisonKeys
-        .map(key => {
-          try {
-            return JSON.parse(localStorage.getItem(key) || '');
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean)
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      setComparisons(loadedComparisons);
+    const loadItems = () => {
+      const allItems = TimelineStorage.getAllStorageItems();
+      setItems(allItems);
       setLoading(false);
     };
 
-    loadComparisons();
+    loadItems();
   }, []);
 
   if (loading) {
@@ -92,7 +61,7 @@ export default function HistoryPage() {
           </p>
         </div>
 
-        {comparisons.length === 0 ? (
+        {items.length === 0 ? (
           <Card>
             <CardContent className="text-center py-12">
               <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -110,77 +79,154 @@ export default function HistoryPage() {
           </Card>
         ) : (
           <div className="grid gap-6">
-            {comparisons.map((comparison) => (
-              <Card key={comparison.id}>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-lg">
-                        {new Date(comparison.timestamp).toLocaleDateString()} at{' '}
-                        {new Date(comparison.timestamp).toLocaleTimeString()}
-                      </CardTitle>
-                      <CardDescription>
-                        {comparison.imageA.name} vs {comparison.imageB.name}
-                      </CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {comparison.feedback && (
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          {comparison.feedback === 'useful' ? (
-                            <ThumbsUp className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <ThumbsDown className="h-4 w-4 text-red-600" />
+            {items.map((item) => {
+              if (isTimelineComparison(item)) {
+                return (
+                  <Card key={item.id} className="border-l-4 border-l-blue-500">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <Clock className="h-5 w-5 text-blue-600" />
+                            {item.title || 'Timeline Comparison'}
+                          </CardTitle>
+                          <CardDescription>
+                            {item.screenshots.length} screenshots • Last updated {new Date(item.updatedAt).toLocaleDateString()}
+                          </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button asChild size="sm">
+                            <Link href={`/timeline/${item.id}`}>
+                              <Play className="mr-2 h-4 w-4" />
+                              View Timeline
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-4 gap-4">
+                        {/* Timeline thumbnails */}
+                        <div className="md:col-span-2">
+                          <p className="text-xs text-muted-foreground mb-2">Screenshots</p>
+                          <div className="flex gap-1 overflow-x-auto">
+                            {item.screenshots.slice(0, 4).map((screenshot, index) => {
+                              const imageSrc = screenshot.data.startsWith('data:')
+                                ? screenshot.data
+                                : `data:${screenshot.type};base64,${screenshot.data}`;
+                              return (
+                              <img
+                                key={screenshot.id}
+                                src={imageSrc}
+                                alt={`Screenshot ${index + 1}`}
+                                className="w-12 h-8 object-cover rounded border flex-shrink-0"
+                              />
+                            );})}
+                            {item.screenshots.length > 4 && (
+                              <div className="w-12 h-8 bg-muted rounded border flex items-center justify-center text-xs text-muted-foreground">
+                                +{item.screenshots.length - 4}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Latest changes */}
+                        <div className="md:col-span-2">
+                          <p className="text-sm font-medium mb-2">Latest changes:</p>
+                          <p className="text-sm text-muted-foreground">
+                            {item.reports.length > 0
+                              ? item.reports[item.reports.length - 1].changes[0] || 'No changes detected'
+                              : 'No reports yet'
+                            }
+                          </p>
+                          {item.reports.length > 1 && (
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {item.reports.length} reports total
+                            </p>
                           )}
                         </div>
-                      )}
-                      <Button asChild size="sm">
-                        <Link href={`/report/${comparison.id}`}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View Report
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    {/* Thumbnail images */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Before</p>
-                        <img
-                          src={`data:${comparison.imageA.type};base64,${comparison.imageA.data}`}
-                          alt="Screenshot A thumbnail"
-                          className="w-full h-20 object-cover rounded border"
-                        />
                       </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">After</p>
-                        <img
-                          src={`data:${comparison.imageB.type};base64,${comparison.imageB.data}`}
-                          alt="Screenshot B thumbnail"
-                          className="w-full h-20 object-cover rounded border"
-                        />
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              if (isComparisonResult(item)) {
+                return (
+                  <Card key={item.id}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-lg">
+                            {new Date(item.timestamp).toLocaleDateString()} at{' '}
+                            {new Date(item.timestamp).toLocaleTimeString()}
+                          </CardTitle>
+                          <CardDescription>
+                            {item.imageA.name} vs {item.imageB.name}
+                          </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {item.feedback && (
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              {item.feedback === 'useful' ? (
+                                <ThumbsUp className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <ThumbsDown className="h-4 w-4 text-red-600" />
+                              )}
+                            </div>
+                          )}
+                          <Button asChild size="sm">
+                            <Link href={`/report/${item.id}`}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View Report
+                            </Link>
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-3 gap-4">
+                        {/* Thumbnail images */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Before</p>
+                            <img
+                              src={item.imageA.data.startsWith('data:') ? item.imageA.data : `data:${item.imageA.type};base64,${item.imageA.data}`}
+                              alt="Screenshot A thumbnail"
+                              className="w-full h-20 object-cover rounded border"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">After</p>
+                            <img
+                              src={item.imageB.data.startsWith('data:') ? item.imageB.data : `data:${item.imageB.type};base64,${item.imageB.data}`}
+                              alt="Screenshot B thumbnail"
+                              className="w-full h-20 object-cover rounded border"
+                            />
+                          </div>
+                        </div>
 
-                    {/* Summary */}
-                    <div className="md:col-span-2">
-                      <p className="text-sm font-medium mb-2">First change detected:</p>
-                      <p className="text-sm text-muted-foreground">
-                        {comparison.comparison.changes[0] || 'No changes detected'}
-                      </p>
+                        {/* Summary */}
+                        <div className="md:col-span-2">
+                          <p className="text-sm font-medium mb-2">First change detected:</p>
+                          <p className="text-sm text-muted-foreground">
+                            {item.comparison.changes[0] || 'No changes detected'}
+                          </p>
 
-                      {comparison.comparison.changes.length > 1 && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          +{comparison.comparison.changes.length - 1} more changes
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                          {item.comparison.changes.length > 1 && (
+                            <p className="text-xs text-muted-foreground mt-2">
+                              +{item.comparison.changes.length - 1} more changes
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              return null;
+            })}
           </div>
         )}
       </div>
