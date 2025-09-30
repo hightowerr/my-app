@@ -11,26 +11,27 @@ const ContinuationComparisonSchema = z.object({
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const requestStartTime = Date.now();
-  console.error('[TIMING] === API ROUTE HIT ===', new Date().toISOString());
+  console.log('[TIMING] === API ROUTE HIT ===', new Date().toISOString());
 
   try {
     const { id: timelineId } = await params;
-    console.error('[TIMING] Params resolved in', Date.now() - requestStartTime, 'ms');
+    console.log('[TIMING] Params resolved in', Date.now() - requestStartTime, 'ms');
 
-    console.error('[TIMING] About to parse JSON body...');
+    console.log('[TIMING] About to parse JSON body...');
 
     // Check Content-Length header
     const contentLength = request.headers.get('content-length');
-    console.error('[VALIDATION] Request Content-Length:', contentLength, 'bytes', contentLength ? `(${(parseInt(contentLength) / 1024 / 1024).toFixed(2)} MB)` : '');
+    console.log('[VALIDATION] Request Content-Length:', contentLength, 'bytes', contentLength ? `(${(parseInt(contentLength) / 1024 / 1024).toFixed(2)} MB)` : '');
 
     const body = await request.json();
-    console.error('[TIMING] ✓ JSON parsed successfully in', Date.now() - requestStartTime, 'ms');
+    console.log('[TIMING] ✓ JSON parsed successfully in', Date.now() - requestStartTime, 'ms');
 
-    const { imageName, imageType, imageData, previousImageData, previousContext } = body;
+    const { imageName, imageType, imageData, previousImageData, previousContext, previousScreenshotId } = body;
 
-    const bodySize = JSON.stringify(body).length;
-    console.error('[VALIDATION] Parsed body size:', (bodySize / 1024 / 1024).toFixed(2), 'MB');
-    console.error('[TIMING] Timeline add screenshot request:', {
+    // Use Content-Length header instead of re-stringifying body (performance optimization)
+    const bodySize = contentLength ? parseInt(contentLength) : 0;
+    console.log('[VALIDATION] Parsed body size:', (bodySize / 1024 / 1024).toFixed(2), 'MB');
+    console.log('[TIMING] Timeline add screenshot request:', {
       timelineId,
       imageName,
       imageType,
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Validate image size (estimate from data URL length)
     const imageSizeBytes = (imageData.length * 3) / 4; // Approximate decoded size
-    console.error('[TIMING] Image validation. Estimated size:', (imageSizeBytes / 1024 / 1024).toFixed(2), 'MB, elapsed:', Date.now() - requestStartTime, 'ms');
+    console.log('[TIMING] Image validation. Estimated size:', (imageSizeBytes / 1024 / 1024).toFixed(2), 'MB, elapsed:', Date.now() - requestStartTime, 'ms');
 
     if (imageSizeBytes > 10 * 1024 * 1024) {
       console.error('Image too large:', imageSizeBytes);
@@ -56,10 +57,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Previous image data is required for comparison' }, { status: 400 });
     }
 
+    if (!previousScreenshotId) {
+      return NextResponse.json({ error: 'Previous screenshot ID is required for linking reports' }, { status: 400 });
+    }
+
     // Extract base64 from data URLs for response (we'll send full data URLs to OpenAI)
     const imageBase64 = imageData.includes(',') ? imageData.split(',')[1] : imageData;
 
-    console.error('[TIMING] Starting AI comparison... elapsed:', Date.now() - requestStartTime, 'ms');
+    console.log('[TIMING] Starting AI comparison... elapsed:', Date.now() - requestStartTime, 'ms');
     const aiStartTime = Date.now();
 
     // Add timeout wrapper for AI generation
@@ -110,7 +115,7 @@ Provide up to 5 concise bullet points describing the NEW changes, plus:
     // Race between AI generation and timeout
     const aiResult = await Promise.race([comparisonPromise, timeoutPromise]);
     const aiDuration = ((Date.now() - aiStartTime) / 1000).toFixed(2);
-    console.error('[TIMING] AI analysis completed in', aiDuration, 'seconds, total elapsed:', Date.now() - requestStartTime, 'ms');
+    console.log('[TIMING] AI analysis completed in', aiDuration, 'seconds, total elapsed:', Date.now() - requestStartTime, 'ms');
 
     // Type assertion for the Promise.race result
     if (!aiResult || typeof aiResult !== 'object' || !('object' in aiResult)) {
@@ -136,12 +141,16 @@ Provide up to 5 concise bullet points describing the NEW changes, plus:
       report: {
         id: reportId,
         type: 'continuation' as const,
-        comparison,
+        fromScreenshotId: previousScreenshotId,
+        toScreenshotId: screenshotId,
+        changes: comparison.changes,
+        implication: comparison.implication,
+        strategicView: comparison.strategicView,
         timestamp: new Date().toISOString()
       }
     };
 
-    console.error('[TIMING] Timeline addition result prepared, total elapsed:', Date.now() - requestStartTime, 'ms');
+    console.log('[TIMING] Timeline addition result prepared, total elapsed:', Date.now() - requestStartTime, 'ms');
     return NextResponse.json(result);
   } catch (error) {
     console.error('Timeline add screenshot error:', error);

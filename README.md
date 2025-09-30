@@ -33,8 +33,8 @@ Open http://localhost:3000 → drag two screenshots → done.
 5. Save to your history with thumbs up/down feedback
 
 **Timeline Flow:**
-1. Start with a 2-screenshot comparison
-2. Convert to timeline (or start fresh)
+1. Start by either: A) creating a 2-screenshot comparison, or B) starting fresh
+2. If you chose option A, convert your comparison to a timeline; if option B, begin your timeline
 3. Add new screenshots one at a time
 4. AI compares each to the previous state
 5. View progression with strategic insights

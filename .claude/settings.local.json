@@ -2,7 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(npx shadcn@latest add:*)",
-      "Bash(pnpm tsc:*)"
+      "Bash(pnpm tsc:*)" // Permits TypeScript compilation scripts (e.g., tsc:build, tsc:watch, tsc:check) - currently no tsc:* scripts defined in package.json
     ],
     "deny": [],
     "ask": []

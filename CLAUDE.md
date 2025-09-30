@@ -172,21 +172,67 @@ All image rendering locations already implement the smart detection pattern:
 
 Timeline reports link to screenshots via IDs. The critical flow:
 
-1. **API generates**: `screenshot.id` and `report.toScreenshotId`
+1. **API generates**: Complete report structure with `screenshot.id`, `report.fromScreenshotId`, and `report.toScreenshotId`
 2. **Storage receives**: Must preserve `screenshot.id` from API (not generate new one)
-3. **Render queries**: `reports.find(r => r.toScreenshotId === screenshot.id)`
+3. **Client must pass**: `previousScreenshotId` in API request payload
+4. **Render queries**: `reports.find(r => r.toScreenshotId === screenshot.id)`
 
-**IMPORTANT**: When calling `TimelineStorage.addScreenshotToTimeline()`, always pass the `id` from the API response:
+**IMPORTANT**: The API route `/api/timeline/[id]/add` now requires `previousScreenshotId` in the request body and returns a complete report structure:
 
 ```typescript
-const result = await fetch('/api/timeline/${id}/add');
+// Client sends (app/upload/page.tsx):
+const payload = {
+  imageName: files.a.name,
+  imageType: files.a.type,
+  imageData: imageDataUrl,
+  previousImageData: previousImageDataUrl,
+  previousScreenshotId: lastScreenshot.id,  // ← Required!
+  previousContext: context
+};
+
+// API returns (app/api/timeline/[id]/add/route.ts):
+const result = {
+  screenshot: { id, name, type, data },
+  report: {
+    id: reportId,
+    type: 'continuation',
+    fromScreenshotId: previousScreenshotId,  // ← From request
+    toScreenshotId: screenshotId,            // ← New screenshot
+    changes: comparison.changes,
+    implication: comparison.implication,
+    strategicView: comparison.strategicView,
+    timestamp: new Date().toISOString()
+  }
+};
+
+// Client saves:
 await TimelineStorage.addScreenshotToTimeline(timelineId, {
-  id: result.screenshot.id,  // ← Must pass this!
+  id: result.screenshot.id,  // ← Preserve from API!
   name: result.screenshot.name,
   data: screenshotDataUrl,
   type: result.screenshot.type,
   size: result.screenshot.size
 });
+updatedTimeline.reports.push(result.report);  // ← Complete report from API
 ```
 
 If IDs don't match, reports will not display for screenshots.
+
+## Development Logging
+
+The codebase uses conditional logging to reduce console noise in production:
+
+```typescript
+// Development flag for conditional logging
+const isDev = process.env.NODE_ENV === 'development';
+
+// Use throughout the file
+if (isDev) {
+  console.log('[DEBUG] Message here');
+}
+```
+
+This pattern is implemented in:
+- `app/upload/page.tsx` (all console.log statements wrapped)
+
+**When adding new logging**: Always wrap console statements with `isDev` check to keep production console clean.

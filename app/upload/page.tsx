@@ -10,6 +10,9 @@ import { cn } from "@/lib/utils";
 import { TimelineComparison } from "@/lib/types";
 import { TimelineStorage } from "@/lib/timeline-storage";
 
+// Development flag for conditional logging
+const isDev = process.env.NODE_ENV === 'development';
+
 export default function UploadPage() {
   const router = useRouter();
   const [dragActive, setDragActive] = useState<{ a: boolean; b: boolean }>({ a: false, b: false });
@@ -68,30 +71,44 @@ export default function UploadPage() {
   };
 
   useEffect(() => {
-    console.log('[UPLOAD] useEffect triggered. Search params:', Object.fromEntries(searchParams.entries()));
+    if (isDev) {
+      console.log('[UPLOAD] useEffect triggered. Search params:', Object.fromEntries(searchParams.entries()));
+    }
     const timelineId = searchParams.get('timelineId');
-    console.log('[UPLOAD] Timeline ID from URL:', timelineId, 'Type:', typeof timelineId);
+    if (isDev) {
+      console.log('[UPLOAD] Timeline ID from URL:', timelineId, 'Type:', typeof timelineId);
+    }
 
     if (timelineId) {
-      console.log('[UPLOAD] Attempting to load timeline with ID:', timelineId);
+      if (isDev) {
+        console.log('[UPLOAD] Attempting to load timeline with ID:', timelineId);
+      }
       const loadedTimeline = TimelineStorage.getTimeline(timelineId);
-      console.log('[UPLOAD] Loaded timeline:', loadedTimeline ? {
-        id: loadedTimeline.id,
-        screenshotCount: loadedTimeline.screenshots?.length,
-        reportsCount: loadedTimeline.reports?.length,
-        type: typeof loadedTimeline,
-        isArray: Array.isArray(loadedTimeline)
-      } : 'null');
+      if (isDev) {
+        console.log('[UPLOAD] Loaded timeline:', loadedTimeline ? {
+          id: loadedTimeline.id,
+          screenshotCount: loadedTimeline.screenshots?.length,
+          reportsCount: loadedTimeline.reports?.length,
+          type: typeof loadedTimeline,
+          isArray: Array.isArray(loadedTimeline)
+        } : 'null');
+      }
 
       if (loadedTimeline) {
         setTimeline(loadedTimeline);
         setIsTimelineMode(true);
-        console.log('[UPLOAD] ✓ Timeline mode activated');
+        if (isDev) {
+          console.log('[UPLOAD] ✓ Timeline mode activated');
+        }
       } else {
-        console.error('[UPLOAD] ✗ Failed to load timeline with ID:', timelineId);
+        if (isDev) {
+          console.error('[UPLOAD] ✗ Failed to load timeline with ID:', timelineId);
+        }
       }
     } else {
-      console.log('[UPLOAD] No timeline ID in URL, using regular comparison mode');
+      if (isDev) {
+        console.log('[UPLOAD] No timeline ID in URL, using regular comparison mode');
+      }
     }
   }, [searchParams]);
 
@@ -121,7 +138,9 @@ export default function UploadPage() {
         throw new Error('Comparison failed');
       }
     } catch (error) {
-      console.error('Error comparing images:', error);
+      if (isDev) {
+        console.error('Error comparing images:', error);
+      }
       alert('Failed to compare images. Please try again.');
     } finally {
       setIsComparing(false);
@@ -129,22 +148,30 @@ export default function UploadPage() {
   };
 
   const handleAddToTimeline = async () => {
-    console.log('[ADD_TO_TIMELINE] Function called. Timeline:', timeline ? {
-      id: timeline.id,
-      type: typeof timeline,
-      isArray: Array.isArray(timeline),
-      hasId: 'id' in timeline,
-      idValue: timeline.id,
-      idType: typeof timeline.id
-    } : 'null');
-    console.log('[ADD_TO_TIMELINE] File A:', files.a ? { name: files.a.name, size: files.a.size } : 'null');
+    if (isDev) {
+      console.log('[ADD_TO_TIMELINE] Function called. Timeline:', timeline ? {
+        id: timeline.id,
+        type: typeof timeline,
+        isArray: Array.isArray(timeline),
+        hasId: 'id' in timeline,
+        idValue: timeline.id,
+        idType: typeof timeline.id
+      } : 'null');
+    }
+    if (isDev) {
+      console.log('[ADD_TO_TIMELINE] File A:', files.a ? { name: files.a.name, size: files.a.size } : 'null');
+    }
 
     if (!timeline || !files.a) {
-      console.error('[ADD_TO_TIMELINE] Missing required data. Timeline:', !!timeline, 'File:', !!files.a);
+      if (isDev) {
+        console.error('[ADD_TO_TIMELINE] Missing required data. Timeline:', !!timeline, 'File:', !!files.a);
+      }
       return;
     }
 
-    console.log('[ADD_TO_TIMELINE] Starting timeline addition process...');
+    if (isDev) {
+      console.log('[ADD_TO_TIMELINE] Starting timeline addition process...');
+    }
     setIsComparing(true);
     setProgressStatus('Preparing image...');
 
@@ -154,20 +181,26 @@ export default function UploadPage() {
 
     // Warning at 30s mark
     const warningId = setTimeout(() => {
-      console.log('[TIMING] 30 seconds elapsed - AI processing is taking longer than expected');
+      if (isDev) {
+        console.log('[TIMING] 30 seconds elapsed - AI processing is taking longer than expected');
+      }
       setProgressStatus('Still processing... Large images may take up to 60 seconds');
     }, 30000);
 
     const timeoutId = setTimeout(() => {
-      console.log('[TIMING] Timeline addition timed out after 90 seconds, aborting request');
+      if (isDev) {
+        console.log('[TIMING] Timeline addition timed out after 90 seconds, aborting request');
+      }
       setProgressStatus('Request timed out, cancelling...');
       controller.abort();
     }, 90000); // 90 second timeout for large images and AI processing
 
     try {
       setProgressStatus('Preparing image data...');
-      console.log('Preparing image data...');
-      console.log('[TIMING] Image file size:', (files.a.size / 1024 / 1024).toFixed(2), 'MB', '| Type:', files.a.type);
+      if (isDev) {
+        console.log('Preparing image data...');
+        console.log('[TIMING] Image file size:', (files.a.size / 1024 / 1024).toFixed(2), 'MB', '| Type:', files.a.type);
+      }
 
       // Convert file to base64
       const reader = new FileReader();
@@ -182,7 +215,9 @@ export default function UploadPage() {
       });
 
       const imageDataUrl = await imageBase64Promise;
-      console.log('[TIMING] Image converted to base64');
+      if (isDev) {
+        console.log('[TIMING] Image converted to base64');
+      }
 
       const lastScreenshot = timeline.screenshots[timeline.screenshots.length - 1];
 
@@ -191,14 +226,20 @@ export default function UploadPage() {
       if (lastScreenshot.data.startsWith('data:')) {
         // Already has data URL prefix, use as-is
         previousImageDataUrl = lastScreenshot.data;
-        console.log('[TIMING] Previous screenshot already has data URL prefix');
+        if (isDev) {
+          console.log('[TIMING] Previous screenshot already has data URL prefix');
+        }
       } else {
         // Raw base64, add prefix
         previousImageDataUrl = `data:${lastScreenshot.type};base64,${lastScreenshot.data}`;
-        console.log('[TIMING] Previous screenshot is raw base64, adding prefix');
+        if (isDev) {
+          console.log('[TIMING] Previous screenshot is raw base64, adding prefix');
+        }
       }
 
-      console.log('[TIMING] Previous screenshot size:', (previousImageDataUrl.length / 1024 / 1024).toFixed(2), 'MB');
+      if (isDev) {
+        console.log('[TIMING] Previous screenshot size:', (previousImageDataUrl.length / 1024 / 1024).toFixed(2), 'MB');
+      }
 
       const previousChanges = timeline.reports
         .filter(r => r.type === 'continuation')
@@ -211,29 +252,36 @@ export default function UploadPage() {
         imageType: files.a.type,
         imageData: imageDataUrl,
         previousImageData: previousImageDataUrl,
+        previousScreenshotId: lastScreenshot.id,
         previousContext: context
       };
 
       const payloadString = JSON.stringify(payload);
       const payloadSizeMB = (payloadString.length / 1024 / 1024).toFixed(2);
-      console.log('[TIMING] Total JSON payload size:', payloadSizeMB, 'MB');
-      console.log('[VALIDATION] Payload breakdown:', {
-        imageDataSizeMB: (imageDataUrl.length / 1024 / 1024).toFixed(2),
-        previousImageSizeMB: (previousImageDataUrl.length / 1024 / 1024).toFixed(2),
-        totalPayloadSizeMB: payloadSizeMB,
-        exceedsLimit: parseFloat(payloadSizeMB) > 4
-      });
+      if (isDev) {
+        console.log('[TIMING] Total JSON payload size:', payloadSizeMB, 'MB');
+        console.log('[VALIDATION] Payload breakdown:', {
+          imageDataSizeMB: (imageDataUrl.length / 1024 / 1024).toFixed(2),
+          previousImageSizeMB: (previousImageDataUrl.length / 1024 / 1024).toFixed(2),
+          totalPayloadSizeMB: payloadSizeMB,
+          exceedsLimit: parseFloat(payloadSizeMB) > 4
+        });
+      }
 
       if (parseFloat(payloadSizeMB) > 4) {
-        console.error('[ERROR] Payload exceeds Next.js 4MB limit!');
+        if (isDev) {
+          console.error('[ERROR] Payload exceeds Next.js 4MB limit!');
+        }
         throw new Error('Images are too large. Please use smaller images (the combined size exceeds 4MB).');
       }
 
       setProgressStatus('Analyzing images with AI...');
       const apiUrl = `/api/timeline/${timeline.id}/add`;
-      console.log('[ADD_TO_TIMELINE] Constructed API URL:', apiUrl);
-      console.log('[ADD_TO_TIMELINE] Timeline ID used:', timeline.id, 'Type:', typeof timeline.id);
-      console.log('[ADD_TO_TIMELINE] Sending request to API...');
+      if (isDev) {
+        console.log('[ADD_TO_TIMELINE] Constructed API URL:', apiUrl);
+        console.log('[ADD_TO_TIMELINE] Timeline ID used:', timeline.id, 'Type:', typeof timeline.id);
+        console.log('[ADD_TO_TIMELINE] Sending request to API...');
+      }
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -248,16 +296,22 @@ export default function UploadPage() {
       clearTimeout(warningId);
       clearTimeout(timeoutId);
 
-      console.log('[ADD_TO_TIMELINE] Response received. Status:', response.status, response.statusText);
+      if (isDev) {
+        console.log('[ADD_TO_TIMELINE] Response received. Status:', response.status, response.statusText);
+      }
 
       if (response.ok) {
         setProgressStatus('Processing AI results...');
-        console.log('[ADD_TO_TIMELINE] API request successful, processing response...');
+        if (isDev) {
+          console.log('[ADD_TO_TIMELINE] API request successful, processing response...');
+        }
         const result = await response.json();
 
         setProgressStatus('Saving to timeline...');
-        console.log('Adding screenshot to timeline storage...');
-        console.log('[DEBUG] API result.screenshot:', { name: result.screenshot.name, dataStart: result.screenshot.data?.substring(0, 50) + '...', type: result.screenshot.type, size: result.screenshot.size });
+        if (isDev) {
+          console.log('Adding screenshot to timeline storage...');
+          console.log('[DEBUG] API result.screenshot:', { name: result.screenshot.name, dataStart: result.screenshot.data?.substring(0, 50) + '...', type: result.screenshot.type, size: result.screenshot.size });
+        }
 
         // Convert raw base64 to data URL format
         const screenshotDataUrl = `data:${result.screenshot.type};base64,${result.screenshot.data}`;
@@ -272,23 +326,18 @@ export default function UploadPage() {
 
         if (updatedTimeline) {
           setProgressStatus('Updating timeline data...');
-          console.log('Timeline updated successfully, adding report...');
-          const newReport = {
-            id: result.report.id,
-            type: 'continuation' as const,
-            fromScreenshotId: lastScreenshot.id,
-            toScreenshotId: result.screenshot.id,
-            changes: result.report.comparison.changes,
-            implication: result.report.comparison.implication,
-            strategicView: result.report.comparison.strategicView,
-            timestamp: result.report.timestamp
-          };
+          if (isDev) {
+            console.log('Timeline updated successfully, adding report...');
+          }
 
-          updatedTimeline.reports.push(newReport);
+          // API now returns the correct report structure with fromScreenshotId and toScreenshotId
+          updatedTimeline.reports.push(result.report);
           TimelineStorage.saveTimeline(updatedTimeline);
 
           setProgressStatus('Complete! Redirecting...');
-          console.log('Timeline addition completed, navigating to timeline page...');
+          if (isDev) {
+            console.log('Timeline addition completed, navigating to timeline page...');
+          }
 
           // Small delay to show completion message
           setTimeout(() => {
@@ -299,19 +348,27 @@ export default function UploadPage() {
         }
       } else {
         // Handle API error responses
-        console.error('[ADD_TO_TIMELINE] API request failed. Status:', response.status, response.statusText);
+        if (isDev) {
+          console.error('[ADD_TO_TIMELINE] API request failed. Status:', response.status, response.statusText);
+        }
         const errorData = await response.json().catch((e) => {
-          console.error('[ADD_TO_TIMELINE] Failed to parse error response:', e);
+          if (isDev) {
+            console.error('[ADD_TO_TIMELINE] Failed to parse error response:', e);
+          }
           return { error: 'Unknown error' };
         });
-        console.error('[ADD_TO_TIMELINE] Error data:', errorData);
+        if (isDev) {
+          console.error('[ADD_TO_TIMELINE] Error data:', errorData);
+        }
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
     } catch (error) {
       // Clear timeouts in case of error
       clearTimeout(warningId);
       clearTimeout(timeoutId);
-      console.error('Error adding to timeline:', error);
+      if (isDev) {
+        console.error('Error adding to timeline:', error);
+      }
 
       let errorMessage = 'Failed to add screenshot to timeline. ';
       if (error instanceof Error) {
@@ -349,7 +406,9 @@ export default function UploadPage() {
 
   const handleCancelAddToTimeline = () => {
     if (abortController) {
-      console.log('User cancelled timeline addition');
+      if (isDev) {
+        console.log('User cancelled timeline addition');
+      }
       setProgressStatus('Cancelling...');
       abortController.abort();
     }
