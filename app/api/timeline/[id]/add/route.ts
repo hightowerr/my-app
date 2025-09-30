@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { openai } from '@ai-sdk/openai';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import crypto from 'crypto';
 
 const ContinuationComparisonSchema = z.object({
   changes: z.array(z.string()).max(5).describe('Up to 5 key differences between the latest screenshots'),
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Check Content-Length header
     const contentLength = request.headers.get('content-length');
-    console.log('[VALIDATION] Request Content-Length:', contentLength, 'bytes', contentLength ? `(${(parseInt(contentLength) / 1024 / 1024).toFixed(2)} MB)` : '');
+    console.log('[VALIDATION] Request Content-Length:', contentLength, 'bytes', contentLength ? `(${(parseInt(contentLength, 10) / 1024 / 1024).toFixed(2)} MB)` : '');
 
     const body = await request.json();
     console.log('[TIMING] ✓ JSON parsed successfully in', Date.now() - requestStartTime, 'ms');
@@ -29,7 +30,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { imageName, imageType, imageData, previousImageData, previousContext, previousScreenshotId } = body;
 
     // Use Content-Length header instead of re-stringifying body (performance optimization)
-    const bodySize = contentLength ? parseInt(contentLength) : 0;
+    // Validate Content-Length is a valid positive integer before parsing
+    const isValidContentLength = contentLength && /^\d+$/.test(contentLength);
+    const bodySize = isValidContentLength ? parseInt(contentLength, 10) : 0;
     console.log('[VALIDATION] Parsed body size:', (bodySize / 1024 / 1024).toFixed(2), 'MB');
     console.log('[TIMING] Timeline add screenshot request:', {
       timelineId,
@@ -61,8 +64,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Previous screenshot ID is required for linking reports' }, { status: 400 });
     }
 
+    // Validate imageData format before extracting base64
+    if (typeof imageData !== 'string' || !imageData) {
+      return NextResponse.json({ error: 'Image data must be a non-empty string' }, { status: 400 });
+    }
+
     // Extract base64 from data URLs for response (we'll send full data URLs to OpenAI)
-    const imageBase64 = imageData.includes(',') ? imageData.split(',')[1] : imageData;
+    // Validate it's a proper data URL format before splitting
+    const dataUrlPattern = /^data:[\w/+.-]+;base64,/;
+    let imageBase64: string;
+
+    if (dataUrlPattern.test(imageData)) {
+      imageBase64 = imageData.split(',')[1];
+    } else if (imageData.includes(',')) {
+      // Has comma but doesn't match data URL pattern
+      return NextResponse.json({
+        error: 'Invalid image format. Expected base64 data URL format: data:image/[type];base64,[data]'
+      }, { status: 400 });
+    } else {
+      // Assume raw base64 (no data URL prefix)
+      imageBase64 = imageData;
+    }
 
     console.log('[TIMING] Starting AI comparison... elapsed:', Date.now() - requestStartTime, 'ms');
     const aiStartTime = Date.now();
@@ -126,8 +148,8 @@ Provide up to 5 concise bullet points describing the NEW changes, plus:
 
     console.log('AI comparison completed successfully');
 
-    const reportId = Math.random().toString(36).substring(2, 15);
-    const screenshotId = Math.random().toString(36).substring(2, 15);
+    const reportId = crypto.randomUUID();
+    const screenshotId = crypto.randomUUID();
 
     const result = {
       timelineId,

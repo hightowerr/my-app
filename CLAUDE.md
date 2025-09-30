@@ -220,7 +220,24 @@ If IDs don't match, reports will not display for screenshots.
 
 ## Development Logging
 
-The codebase uses conditional logging to reduce console noise in production:
+### Log Level Semantics
+
+**IMPORTANT**: Use appropriate console methods for different log types:
+- `console.log()` - Informational/timing/debug messages
+- `console.error()` - Actual errors and exceptions only
+
+This prevents false positives in error monitoring systems (Sentry, etc.).
+
+**Example from API routes**:
+```typescript
+console.log('[TIMING] Request started');  // ✅ Info
+console.log('[VALIDATION] Body size: 2MB');  // ✅ Info
+console.error('Image too large:', size);  // ✅ Actual error
+```
+
+### Conditional Logging (Client-Side)
+
+Client-side code uses conditional logging to reduce console noise in production:
 
 ```typescript
 // Development flag for conditional logging
@@ -235,4 +252,81 @@ if (isDev) {
 This pattern is implemented in:
 - `app/upload/page.tsx` (all console.log statements wrapped)
 
-**When adding new logging**: Always wrap console statements with `isDev` check to keep production console clean.
+**When adding new client-side logging**: Always wrap console statements with `isDev` check.
+
+**API routes**: Use `console.log` directly (Next.js server logs aren't sent to browser).
+
+## Security & Code Quality Patterns
+
+### ID Generation
+
+**CRITICAL**: Always use cryptographically secure ID generation:
+
+```typescript
+import crypto from 'crypto';
+
+// ✅ Correct - cryptographically secure
+const id = crypto.randomUUID();
+
+// ❌ Wrong - predictable, vulnerable to attacks
+const id = Math.random().toString(36).substring(2, 15);
+```
+
+**Rationale**: `Math.random()` is not cryptographically secure and can lead to:
+- ID collisions at scale
+- Predictable IDs that can be enumerated by attackers
+- Security vulnerabilities in timeline/report linking
+
+All ID generation has been migrated to `crypto.randomUUID()` (Node 14.17+).
+
+### parseInt() Best Practices
+
+**ALWAYS** specify radix when using `parseInt()`:
+
+```typescript
+// ✅ Correct - explicit decimal parsing
+const size = parseInt(contentLength, 10);
+
+// ❌ Wrong - can interpret as octal/hex
+const size = parseInt(contentLength);
+```
+
+**Validate before parsing**:
+```typescript
+// ✅ Validate numeric string before parsing
+const isValid = contentLength && /^\d+$/.test(contentLength);
+const size = isValid ? parseInt(contentLength, 10) : 0;
+
+// ❌ Wrong - NaN from invalid input like "abc", "12px"
+const size = parseInt(contentLength, 10);
+```
+
+### Input Validation (API Routes)
+
+**ALWAYS** validate input format before string operations:
+
+```typescript
+// ✅ Correct - validate data URL format before split
+const dataUrlPattern = /^data:[\w/+.-]+;base64,/;
+if (dataUrlPattern.test(imageData)) {
+  const base64 = imageData.split(',')[1];
+} else if (imageData.includes(',')) {
+  return NextResponse.json({ error: 'Invalid format' }, { status: 400 });
+} else {
+  // Handle raw base64
+  const base64 = imageData;
+}
+
+// ❌ Wrong - blind split can fail or produce unexpected results
+const base64 = imageData.split(',')[1];
+```
+
+**Validation checklist for API inputs**:
+1. Type check (`typeof x === 'string'`)
+2. Null/empty check (`!x`)
+3. Format validation (regex pattern)
+4. Return 400 errors with clear messages for invalid input
+
+**Files with comprehensive validation**:
+- `app/api/timeline/[id]/add/route.ts` (Content-Length, imageData format)
+- `app/api/compare/route.ts` (form data validation)

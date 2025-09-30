@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { openai } from '@ai-sdk/openai';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import crypto from 'crypto';
 
 const ComparisonSchema = z.object({
   changes: z.array(z.string()).max(5).describe('Up to 5 key differences between the screenshots'),
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Generate unique ID for this comparison
-    const comparisonId = Math.random().toString(36).substring(2, 15);
+    const comparisonId = crypto.randomUUID();
 
     // In a real app, you'd save this to a database
     // For now, we'll just return the data and handle storage client-side
