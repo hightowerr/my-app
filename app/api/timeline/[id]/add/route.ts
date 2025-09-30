@@ -3,6 +3,7 @@ import { openai } from '@ai-sdk/openai';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { getProductPsychologyInsights } from '@/lib/retrieval/vectorize';
 
 const ContinuationComparisonSchema = z.object({
   changes: z.array(z.string()).max(5).describe('Up to 5 key differences between the latest screenshots'),
@@ -148,6 +149,22 @@ Provide up to 5 concise bullet points describing the NEW changes, plus:
 
     console.log('AI comparison completed successfully');
 
+    // Retrieve product psychology insights (non-blocking - fail gracefully)
+    let psychologyInsights: Awaited<ReturnType<typeof getProductPsychologyInsights>> = [];
+    try {
+      const retrievalContext = `Timeline continuation. Previous context: ${previousContext}. New changes: ${comparison.changes.join('; ')}. Implication: ${comparison.implication}. Strategic view: ${comparison.strategicView}`;
+      psychologyInsights = await getProductPsychologyInsights(retrievalContext);
+      console.log('[INSIGHTS] Successfully retrieved', psychologyInsights.length, 'psychology insights');
+    } catch (insightError) {
+      // Log the error but don't fail the request
+      console.error('[INSIGHTS] Failed to retrieve psychology insights:', insightError);
+      if (insightError instanceof Error) {
+        console.error('[INSIGHTS] Error details:', insightError.message);
+      }
+      // Set to empty array so the request can continue without insights
+      psychologyInsights = [];
+    }
+
     const reportId = crypto.randomUUID();
     const screenshotId = crypto.randomUUID();
 
@@ -168,6 +185,8 @@ Provide up to 5 concise bullet points describing the NEW changes, plus:
         changes: comparison.changes,
         implication: comparison.implication,
         strategicView: comparison.strategicView,
+        // Only include insights if array is non-empty
+        psychologyInsights: psychologyInsights.length > 0 ? psychologyInsights : undefined,
         timestamp: new Date().toISOString()
       }
     };

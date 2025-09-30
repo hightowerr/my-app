@@ -1,12 +1,12 @@
 # Screenshot Compare for PMs
 
-Stop manually explaining product changes. Upload two screenshots, get instant AI analysis.
+Stop manually explaining product changes. Upload two screenshots, get instant AI analysis with product psychology insights.
 
 ## The Problem We're Solving
 
 PMs spend way too much time writing up competitor changes, A/B test results, and demo explanations. You take screenshots, then manually write bullets about what changed. It's slow, you miss stuff, and honestly pretty boring work.
 
-This tool does that work for you. Upload before/after screenshots → get clear change analysis → spend time on strategy instead.
+This tool does that work for you. Upload before/after screenshots → get clear change analysis + psychology insights → spend time on strategy instead.
 
 ## Quick Start
 
@@ -15,13 +15,19 @@ git clone <repo-url>
 cd my-app
 pnpm install
 
-# Add your OpenAI key
-echo "OPENAI_API_KEY=your_key_here" > .env.local
+# Add your API keys to .env.local
+cat > .env.local << EOF
+OPENAI_API_KEY=your_openai_key_here
+VECTORIZE_ACCESS_TOKEN=your_vectorize_token_here
+VECTORIZE_ENDPOINT=https://your-vectorize-endpoint.com/org/pipeline/retrieval
+EOF
 
 pnpm dev
 ```
 
 Open http://localhost:3000 → drag two screenshots → done.
+
+**Note**: Product psychology insights require Vectorize API access. The app works without it (insights will be skipped gracefully).
 
 ## How It Works
 
@@ -30,14 +36,15 @@ Open http://localhost:3000 → drag two screenshots → done.
 2. Upload screenshot B (after)
 3. AI finds the differences
 4. Get max 5 bullet points + "so what does this mean"
-5. Save to your history with thumbs up/down feedback
+5. **Product psychology insights**: See which UX principles apply (e.g., "Scarcity" for countdown timers)
+6. Save to your history with thumbs up/down feedback
 
 **Timeline Flow:**
 1. Start by either: A) creating a 2-screenshot comparison, or B) starting fresh
 2. If you chose option A, convert your comparison to a timeline; if option B, begin your timeline
 3. Add new screenshots one at a time
 4. AI compares each to the previous state
-5. View progression with strategic insights
+5. View progression with strategic insights and psychology principles
 
 Perfect for:
 - Competitor tracking (monitor their pricing page evolution)
@@ -47,37 +54,59 @@ Perfect for:
 
 ## What We Built
 
-**Single Comparisons** (P1 MVP):
+**Single Comparisons**:
 - One user, no accounts needed
 - Upload 2 screenshots for side-by-side comparison
 - AI generates one report per pair (max 5 changes + "so what")
+- **Product psychology insights** with positive/negative UX classification
 - Simple history with thumbnails
 - Useful/not useful feedback
 
-**Timeline Feature** (Now Live):
+**Timeline Feature**:
 - Track UI evolution with multiple screenshots in sequence
 - Add screenshots one-by-one to build a progression
 - AI analyzes each addition vs. previous state
 - Strategic view of how changes fit overall direction
+- **Psychology insights** for each change in the progression
 - Navigate through timeline with thumbnails
 - Automatic image compression (~400KB per screenshot)
 - localStorage-based persistence (4MB auto-cleanup)
+
+**Product Psychology Insights** (New):
+- Powered by RAG retrieval (Vectorize) over product psychology knowledge base
+- GPT-4o-mini synthesizes raw retrieval into contextual insights
+- Each insight shows: principle name + positive/negative outcome + rationale
+- Validates principles against retrieved docs (prevents AI hallucination)
+- Insights reference specific UI changes and reinforce the "So what"
+- Example: *"Scarcity (Negative): Removing the countdown timer reduces urgency, potentially decreasing conversion rates"*
 
 **Next up**: Chrome extension, batch uploads, export reports.
 
 ## Tech Details
 
-- Next.js 15 + React 19 + TypeScript
-- OpenAI GPT-4o for image analysis
-- shadcn/ui components + Tailwind
-- localStorage (no database complexity)
-- pnpm only
+- **Framework**: Next.js 15 + React 19 + TypeScript
+- **AI Stack**:
+  - OpenAI GPT-4o for screenshot vision analysis
+  - GPT-4o-mini for synthesizing psychology insights
+  - Vectorize RAG for product psychology knowledge retrieval
+- **UI**: shadcn/ui components + Tailwind CSS v4 + OKLCH color space
+- **Storage**: localStorage (no database complexity, 4MB quota management)
+- **Package Manager**: pnpm only
 
 ```bash
 pnpm dev          # Start with Turbopack
 pnpm tsc --noEmit # Type check before committing
 pnpm lint         # Keep it clean
+pnpm build        # Production build
 ```
+
+### Architecture Highlights
+
+- **Three-step RAG pipeline**: Vectorize retrieval → GPT-4o-mini synthesis → validation filter
+- **Automatic image compression**: ~400KB per screenshot using HTML5 Canvas API
+- **Smart localStorage management**: Auto-cleanup of oldest data when approaching quota
+- **Type-safe**: Zod schemas for AI responses, strict TypeScript throughout
+- **Graceful degradation**: Psychology insights are optional (fail gracefully if Vectorize unavailable)
 
 ## Success Metrics
 

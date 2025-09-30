@@ -3,6 +3,7 @@ import { openai } from '@ai-sdk/openai';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { getProductPsychologyInsights } from '@/lib/retrieval/vectorize';
 
 const ComparisonSchema = z.object({
   changes: z.array(z.string()).max(5).describe('Up to 5 key differences between the screenshots'),
@@ -57,6 +58,22 @@ export async function POST(request: NextRequest) {
       ]
     });
 
+    // Retrieve product psychology insights (non-blocking - fail gracefully)
+    let psychologyInsights: Awaited<ReturnType<typeof getProductPsychologyInsights>> = [];
+    try {
+      const retrievalContext = `Screenshot comparison changes: ${comparison.changes.join('; ')}. Implication: ${comparison.implication}`;
+      psychologyInsights = await getProductPsychologyInsights(retrievalContext);
+      console.log('[INSIGHTS] Successfully retrieved', psychologyInsights.length, 'psychology insights');
+    } catch (insightError) {
+      // Log the error but don't fail the request
+      console.error('[INSIGHTS] Failed to retrieve psychology insights:', insightError);
+      if (insightError instanceof Error) {
+        console.error('[INSIGHTS] Error details:', insightError.message);
+      }
+      // Set to empty array so the request can continue without insights
+      psychologyInsights = [];
+    }
+
     // Generate unique ID for this comparison
     const comparisonId = crypto.randomUUID();
 
@@ -76,7 +93,11 @@ export async function POST(request: NextRequest) {
         type: imageB.type,
         data: imageBBase64
       },
-      comparison,
+      comparison: {
+        ...comparison,
+        // Only include insights if array is non-empty
+        psychologyInsights: psychologyInsights.length > 0 ? psychologyInsights : undefined
+      },
       timestamp: new Date().toISOString()
     };
 

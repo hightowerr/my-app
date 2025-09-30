@@ -9,6 +9,7 @@ import { ArrowLeft, ThumbsUp, ThumbsDown, Upload, History, Clock, Plus } from "l
 import { cn } from "@/lib/utils";
 import { ComparisonResult } from "@/lib/types";
 import { TimelineStorage } from "@/lib/timeline-storage";
+import { StorageUtils } from "@/lib/storage-utils";
 
 
 export default function ReportPage() {
@@ -41,8 +42,13 @@ export default function ReportPage() {
     setResult(updatedResult);
     setFeedback(type);
 
-    // Save to localStorage
-    localStorage.setItem(`comparison-${params.id}`, JSON.stringify(updatedResult));
+    // Save to localStorage using safe storage
+    try {
+      StorageUtils.safeSetItem(`comparison-${params.id}`, JSON.stringify(updatedResult));
+    } catch (error) {
+      console.error('Failed to save feedback:', error);
+      // Don't alert user for feedback failures, just log it
+    }
 
     // In a real app, you'd also send this to your backend
     console.log(`Feedback for ${params.id}: ${type}`);
@@ -211,6 +217,37 @@ export default function ReportPage() {
                 {result.comparison.implication}
               </p>
             </div>
+
+            {result.comparison.psychologyInsights && result.comparison.psychologyInsights.length > 0 && (
+              <div className="border-t pt-4">
+                <h3 className="font-semibold mb-3">Product Psychology Insights</h3>
+                <div className="space-y-3">
+                  {result.comparison.psychologyInsights.map((insight, index) => (
+                    <div key={index} className="flex items-start gap-3 bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg">
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold flex-shrink-0 text-lg">💡</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-sm text-blue-900 dark:text-blue-100">
+                            {insight.principle}
+                          </span>
+                          <span className={cn(
+                            "px-2 py-0.5 text-xs font-medium rounded-full",
+                            insight.outcome === 'positive'
+                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                              : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                          )}>
+                            {insight.outcome === 'positive' ? 'Positive' : 'Negative'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-blue-900/80 dark:text-blue-100/80">
+                          {insight.rationale}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -1,3 +1,9 @@
+export interface FormattedInsight {
+  principle: string;      // Plain text, no markdown
+  outcome: 'positive' | 'negative';
+  rationale: string;      // Plain text, no markdown
+}
+
 export interface ComparisonResult {
   id: string;
   imageA: {
@@ -15,6 +21,7 @@ export interface ComparisonResult {
   comparison: {
     changes: string[];
     implication: string;
+    psychologyInsights?: FormattedInsight[];
   };
   timestamp: string;
   feedback?: 'useful' | 'not-useful';
@@ -38,6 +45,7 @@ export interface TimelineReport {
   changes: string[];
   implication: string;
   strategicView?: string;
+  psychologyInsights?: FormattedInsight[];
   timestamp: string;
 }
 

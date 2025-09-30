@@ -244,6 +244,37 @@ export default function TimelinePage() {
                   </p>
                 </div>
               )}
+
+              {currentReport.psychologyInsights && currentReport.psychologyInsights.length > 0 && (
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold mb-3">Product Psychology Insights</h3>
+                  <div className="space-y-3">
+                    {currentReport.psychologyInsights.map((insight, index) => (
+                      <div key={index} className="flex items-start gap-3 bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg">
+                        <span className="text-blue-600 dark:text-blue-400 font-semibold flex-shrink-0 text-lg">💡</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-sm text-blue-900 dark:text-blue-100">
+                              {insight.principle}
+                            </span>
+                            <span className={cn(
+                              "px-2 py-0.5 text-xs font-medium rounded-full",
+                              insight.outcome === 'positive'
+                                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                            )}>
+                              {insight.outcome === 'positive' ? 'Positive' : 'Negative'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-blue-900/80 dark:text-blue-100/80">
+                            {insight.rationale}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

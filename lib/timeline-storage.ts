@@ -1,6 +1,5 @@
 import { ComparisonResult, TimelineComparison, TimelineScreenshot, TimelineReport, StorageItem, isTimelineComparison, isComparisonResult } from './types';
 import { StorageUtils } from './storage-utils';
-import crypto from 'crypto';
 
 export class TimelineStorage {
   private static TIMELINE_PREFIX = 'timeline-';
@@ -15,7 +14,7 @@ export class TimelineStorage {
     }
 
     const now = new Date().toISOString();
-    const timelineId = `${this.TIMELINE_PREFIX}${crypto.randomUUID()}`;
+    const timelineId = `${this.TIMELINE_PREFIX}${globalThis.crypto.randomUUID()}`;
 
     console.log('Compressing images for timeline creation...');
 
@@ -195,7 +194,7 @@ export class TimelineStorage {
       const base64Data = compressedData.includes(',') ? compressedData.split(',')[1] : compressedData;
 
       const newScreenshot: TimelineScreenshot = {
-        id: screenshot.id || `screenshot-${crypto.randomUUID()}`,
+        id: screenshot.id || `screenshot-${globalThis.crypto.randomUUID()}`,
         name: screenshot.name,
         data: base64Data,
         type: 'image/jpeg', // Always store as JPEG after compression

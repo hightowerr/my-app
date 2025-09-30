@@ -9,6 +9,7 @@ import { ArrowLeft, Upload, X, Loader2, Clock, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TimelineComparison } from "@/lib/types";
 import { TimelineStorage } from "@/lib/timeline-storage";
+import { StorageUtils } from "@/lib/storage-utils";
 
 // Development flag for conditional logging
 const isDev = process.env.NODE_ENV === 'development';
@@ -130,10 +131,17 @@ export default function UploadPage() {
       if (response.ok) {
         const result = await response.json();
 
-        // Store result in localStorage for the report page
-        localStorage.setItem(`comparison-${result.id}`, JSON.stringify(result));
-
-        router.push(`/report/${result.id}`);
+        // Store result in localStorage for the report page using safe storage
+        try {
+          StorageUtils.safeSetItem(`comparison-${result.id}`, JSON.stringify(result));
+          router.push(`/report/${result.id}`);
+        } catch (storageError) {
+          if (storageError instanceof Error && storageError.message === 'STORAGE_QUOTA_EXCEEDED') {
+            alert('Storage space is full! Please go to the History page and delete some old comparisons or timelines to free up space, then try again.');
+          } else {
+            throw storageError;
+          }
+        }
       } else {
         throw new Error('Comparison failed');
       }
