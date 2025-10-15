@@ -4,6 +4,7 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { getProductPsychologyInsights } from '@/lib/retrieval/vectorize';
+import { SCREENSHOT_COMPARISON_PROMPT } from '@/components/agents/prompts/screenshot-comparison';
 
 const ComparisonSchema = z.object({
   changes: z.array(z.string()).max(5).describe('Up to 5 key differences between the screenshots'),
@@ -36,14 +37,7 @@ export async function POST(request: NextRequest) {
           content: [
             {
               type: 'text',
-              text: `Compare these two screenshots and identify the key differences. Focus on:
-              - Layout changes
-              - Content differences (text, images, buttons)
-              - Color or styling changes
-              - New or removed elements
-              - Functionality changes
-
-              Provide up to 5 concise bullet points describing the changes, plus one line explaining why these changes might matter from a product perspective.`
+              text: SCREENSHOT_COMPARISON_PROMPT
             },
             {
               type: 'image',

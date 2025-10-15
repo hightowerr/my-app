@@ -59,8 +59,14 @@ This is a **Screenshot Compare App for PMs** built on Next.js 15 - a tool for co
 - **Core Libraries**:
   - `lib/types.ts`: TypeScript interfaces for ComparisonResult, TimelineComparison, TimelineScreenshot, TimelineReport
   - `lib/timeline-storage.ts`: Timeline persistence and management utilities with image compression
+  - `lib/timeline-summary.ts`: Hierarchical timeline summaries (auto-generate every 5 screenshots)
+  - `lib/timeline-context.ts`: Context management with sliding window and hierarchical summaries
   - `lib/storage-utils.ts`: Image compression, localStorage quota management, and automatic cleanup
   - `lib/retrieval/vectorize.ts`: Vectorize RAG integration for product psychology insights
+  - `lib/retrieval/hybrid-search.ts`: Hybrid search (semantic + keyword) with deduplication and merging
+  - `lib/retrieval/query-rewriter.ts`: Query optimization for semantic search
+  - `lib/retrieval/formatPsychInsights.ts`: Markdown stripping and insight validation
+  - `components/agents/prompts/`: AI prompt templates (psychology-synthesis, re-ranking, timeline-summary, keyword-query)
   - `components/ui/`: shadcn/ui component library (button, card, input, label)
   - `lib/utils.ts`: Utility functions for class composition
 - **Configuration**:
@@ -91,6 +97,10 @@ This is a **Screenshot Compare App for PMs** built on Next.js 15 - a tool for co
 - **OPENAI_API_KEY**: Required for screenshot comparison functionality (GPT-4o vision)
 - **VECTORIZE_ACCESS_TOKEN**: Required for product psychology insights retrieval
 - **VECTORIZE_ENDPOINT**: Full Vectorize retrieval endpoint URL (includes org/pipeline path)
+- **ENABLE_HYBRID_SEARCH**: Set to `true` to enable hybrid search (semantic + keyword queries)
+- **DISABLE_HIERARCHICAL_SUMMARIES**: Set to `true` to disable automatic timeline summaries (defaults to enabled)
+- **DISABLE_QUERY_REWRITING**: Set to `true` to disable query rewriting (defaults to enabled)
+- **DISABLE_RERANKING**: Set to `true` to disable LLM re-ranking (defaults to enabled)
 - **Node.js**: Version 18+ (current setup uses v18.20.5)
 
 ### Product Context
@@ -114,11 +124,28 @@ The Timeline feature allows users to track UI changes over time by adding multip
 - **AI Analysis Types**:
   - `initial`: First comparison between two screenshots
   - `continuation`: Adding new screenshot to existing timeline (compares against previous)
-  - `summary`: Future feature for trend analysis
+  - `summary`: Automatic phase summaries every 5 screenshots (hierarchical timeline summaries)
 - **Storage Management**: Automatic quota monitoring with cleanup of oldest items when approaching 4MB limit
 - **Timeline Creation**: Convert any ComparisonResult into a timeline, or create new timeline from upload
 - **Progression Analysis**: AI provides strategic view of how changes fit into overall timeline direction
 - **Error Handling**: Comprehensive timeout management (30s API, 45s client) with user cancellation
+- **Context Management** (`lib/timeline-context.ts`):
+  - **Hierarchical summaries** - Auto-generates phase summaries every 5 screenshots (enabled by default)
+  - **Sliding window strategy** - Keeps last 3 reports in full detail, summarizes older ones
+  - **Theme extraction** - Categorizes older changes into UI patterns (styling, layout, CTA, forms, etc.)
+  - **Prevents unbounded growth** - Context stays ~200-300 words even for 30+ screenshot timelines
+  - **Maintains strategic view** - Includes last report's strategic direction for continuity
+  - Alternative: time-based windowing (last 7 days in detail)
+- **Timeline Summary Feature** (`lib/timeline-summary.ts`):
+  - **Auto-generation**: Triggers every 5 screenshots (configurable via `SUMMARY_BATCH_SIZE`)
+  - **Phase reports**: Each summary includes phaseTitle, keyPatterns (2-3), strategicDirection, and top 5 changes
+  - **Server-side generation**: Summaries created in `app/api/timeline/[id]/add/route.ts` to keep API keys secure
+  - **Client sends**: `allReports` array in request payload for summary calculation
+  - **API returns**: Optional `summaryReport` field (null if no summary needed)
+  - **UI display**: Purple-styled cards in `app/timeline/[id]/page.tsx` with 📊 icon
+  - **GPT-4o-mini**: Synthesizes summaries from batches of 5 reports
+  - **Report type**: `type='summary'` with `toScreenshotId` linking to the 5th screenshot in the batch
+  - **Security**: OpenAI API key only used server-side (never exposed to browser)
 
 ### Styling Architecture
 
@@ -180,7 +207,9 @@ Timeline reports link to screenshots via IDs. The critical flow:
 1. **API generates**: Complete report structure with `screenshot.id`, `report.fromScreenshotId`, and `report.toScreenshotId`
 2. **Storage receives**: Must preserve `screenshot.id` from API (not generate new one)
 3. **Client must pass**: `previousScreenshotId` in API request payload
-4. **Render queries**: `reports.find(r => r.toScreenshotId === screenshot.id)`
+4. **Render queries**: `reports.filter(r => r.toScreenshotId === screenshot.id)` (uses `.filter()` not `.find()`)
+
+**IMPORTANT**: Multiple reports can link to the same screenshot (e.g., screenshot #5 has both a continuation report AND a summary report). Always use `.filter()` to get ALL reports for a screenshot, then map over them for rendering.
 
 **IMPORTANT**: The API route `/api/timeline/[id]/add` now requires `previousScreenshotId` in the request body and returns a complete report structure:
 
@@ -379,10 +408,30 @@ export interface FormattedInsight {
 - **30-second timeout** on Vectorize API calls with AbortController
 - **maxResults capped** at `MAX_INSIGHTS` (3) to match Zod schema constraint
 - **Type-safe document parsing**: `VectorizeDocument` interface with defensive field access
-- **Three-step process:**
-  1. Vectorize RAG retrieves raw chunks (may contain table formatting, markdown, noise)
-  2. GPT-4o-mini synthesizes chunks into structured insights with Zod schema enforcement
-  3. Validation filters insights where principle name doesn't appear in retrieved chunks
+- **Five-step RAG pipeline** (enhanced with query rewriting + re-ranking + hybrid search):
+  1. **Query generation** - Either single semantic query OR hybrid (semantic + keyword) queries in parallel
+  2. **Vectorize retrieval** - Fetches 3x documents (for re-ranking); hybrid mode merges results from 2 parallel API calls
+  3. **Re-ranking** - LLM scores and filters top-k by relevance to context (prompt explicitly states valid index range)
+  4. **AI synthesis** - GPT-4o-mini generates structured insights with Zod schema
+  5. **Validation** - Filters insights where principle name doesn't appear in chunks
+- **Query rewriting benefits** (`lib/retrieval/query-rewriter.ts`):
+  - Handles long timeline contexts gracefully (30+ screenshots)
+  - Better embedding matching for semantic search
+  - Removes metadata noise ("Timeline continuation", etc.)
+- **Hybrid search benefits** (`lib/retrieval/hybrid-search.ts`):
+  - Combines semantic and keyword-based retrieval for better diversity
+  - Makes 2 parallel Vectorize API calls with different query types
+  - Merges results with scoring: semantic 2x weight, bonus for appearing in both
+  - Deduplicates using Jaccard similarity (>80% threshold)
+  - Keyword query extracts 5-7 specific psychology/UX terms
+  - Enabled via `ENABLE_HYBRID_SEARCH=true` environment variable
+  - Falls back to semantic-only on failure
+- **Re-ranking benefits** (`components/agents/prompts/re-ranking.ts`):
+  - Filters false positives from semantic search
+  - Dramatically improves quality for multi-screenshot timelines
+  - Contextual relevance scoring (not just embedding similarity)
+  - Explicit index validation: prompt states "Valid indices are 0 to N-1 ONLY"
+  - Prevents LLM from extracting document numbers instead of indices
 - **AI synthesis constraints:**
   - Must select principles ONLY from retrieved documents (no freestyling)
   - Must classify each as positive/negative for UX
@@ -635,3 +684,35 @@ const id = globalThis.crypto.randomUUID();
 **Files that use Node.js `crypto`**:
 - API routes (`app/api/**/*.ts`)
 - Server-only utilities
+
+### Error: "btoa() The string to be encoded contains characters outside of the Latin1 range"
+
+**Problem**: `btoa()` only supports Latin1 (ISO-8859-1) characters, but timeline data contains UTF-8 (emojis, special chars, etc.).
+
+**Solution**: Use UTF-8 safe base64 encoding (`lib/timeline-storage.ts:4-26`):
+```typescript
+function utf8ToBase64(str: string): string {
+  try {
+    // Use TextEncoder for proper UTF-8 encoding
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+
+    // Convert Uint8Array to base64
+    let binary = '';
+    const len = data.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(data[i]);
+    }
+    return btoa(binary);
+  } catch (error) {
+    console.warn('[STORAGE] Failed to encode to base64:', error);
+    return str; // Fallback for size calculation
+  }
+}
+```
+
+**Why this works:**
+- `TextEncoder` properly converts UTF-8 strings to bytes
+- Byte-by-byte conversion creates Latin1-safe string for `btoa()`
+- Handles emojis, special characters, and all Unicode
+- Used only for size calculation logging (not actual storage)

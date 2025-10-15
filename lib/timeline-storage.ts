@@ -1,6 +1,30 @@
 import { ComparisonResult, TimelineComparison, TimelineScreenshot, TimelineReport, StorageItem, isTimelineComparison, isComparisonResult } from './types';
 import { StorageUtils } from './storage-utils';
 
+/**
+ * UTF-8 safe base64 encoding for size calculation.
+ * Unlike btoa(), this handles Unicode characters properly.
+ */
+function utf8ToBase64(str: string): string {
+  try {
+    // Use TextEncoder for proper UTF-8 encoding
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+
+    // Convert Uint8Array to base64
+    let binary = '';
+    const len = data.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(data[i]);
+    }
+    return btoa(binary);
+  } catch (error) {
+    // Fallback: just return the string length estimate
+    console.warn('[STORAGE] Failed to encode to base64, using length estimate:', error);
+    return str; // Approximation for size calculation
+  }
+}
+
 export class TimelineStorage {
   private static TIMELINE_PREFIX = 'timeline-';
   private static COMPARISON_PREFIX = 'comparison-';
@@ -85,7 +109,7 @@ export class TimelineStorage {
     const timelineData = JSON.stringify(timeline);
 
     console.log('Saving timeline:', timeline.id);
-    console.log('Timeline data size:', StorageUtils.getDataSizeKB(`data:application/json;base64,${btoa(timelineData)}`), 'KB');
+    console.log('Timeline data size:', StorageUtils.getDataSizeKB(`data:application/json;base64,${utf8ToBase64(timelineData)}`), 'KB');
 
     const storageSummary = StorageUtils.getStorageSummary();
     console.log('Storage summary before save:', storageSummary);

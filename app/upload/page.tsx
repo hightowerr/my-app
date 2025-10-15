@@ -5,11 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Upload, X, Loader2, Clock, Plus } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeft, Upload, X, Loader2, Clock, Plus, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TimelineComparison } from "@/lib/types";
 import { TimelineStorage } from "@/lib/timeline-storage";
 import { StorageUtils } from "@/lib/storage-utils";
+import { buildTimelineContext } from "@/lib/timeline-context";
 
 // Development flag for conditional logging
 const isDev = process.env.NODE_ENV === 'development';
@@ -24,6 +27,7 @@ export default function UploadPage() {
   const [isTimelineMode, setIsTimelineMode] = useState(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [previewDialog, setPreviewDialog] = useState<'a' | 'b' | null>(null);
   const searchParams = useSearchParams();
 
   const handleDrag = (e: React.DragEvent, slot: 'a' | 'b') => {
@@ -249,11 +253,19 @@ export default function UploadPage() {
         console.log('[TIMING] Previous screenshot size:', (previousImageDataUrl.length / 1024 / 1024).toFixed(2), 'MB');
       }
 
-      const previousChanges = timeline.reports
-        .filter(r => r.type === 'continuation')
-        .map(r => r.changes.join(', '))
-        .join(' | ');
-      const context = `Previous changes in timeline: ${previousChanges || 'Initial comparison'}`;
+      // Use smart context building with sliding window strategy
+      const context = buildTimelineContext(timeline);
+
+      // Send lightweight report metadata (without screenshot data) for summary generation
+      const reportsMetadata = timeline.reports.map(r => ({
+        id: r.id,
+        type: r.type,
+        changes: r.changes,
+        implication: r.implication,
+        strategicView: r.strategicView,
+        fromScreenshotId: r.fromScreenshotId,
+        toScreenshotId: r.toScreenshotId
+      }));
 
       const payload = {
         imageName: files.a.name,
@@ -261,7 +273,9 @@ export default function UploadPage() {
         imageData: imageDataUrl,
         previousImageData: previousImageDataUrl,
         previousScreenshotId: lastScreenshot.id,
-        previousContext: context
+        previousContext: context,
+        allReports: reportsMetadata, // Send lightweight report metadata
+        screenshotCount: timeline.screenshots.length // For toScreenshotId mapping
       };
 
       const payloadString = JSON.stringify(payload);
@@ -340,6 +354,15 @@ export default function UploadPage() {
 
           // API now returns the correct report structure with fromScreenshotId and toScreenshotId
           updatedTimeline.reports.push(result.report);
+
+          // If API generated a summary, add it to the timeline
+          if (result.summaryReport) {
+            if (isDev) {
+              console.log('Summary received from API:', result.summaryReport.phaseTitle);
+            }
+            updatedTimeline.reports.push(result.summaryReport);
+          }
+
           TimelineStorage.saveTimeline(updatedTimeline);
 
           setProgressStatus('Complete! Redirecting...');
@@ -465,19 +488,33 @@ export default function UploadPage() {
             />
           </div>
         ) : (
-          <div className="relative">
-            <img
-              src={previews[slot]}
-              alt={`Preview ${slot}`}
-              className="w-full h-48 object-contain rounded-lg border"
-            />
+          <div className="relative group">
+            <div
+              className="relative cursor-pointer"
+              onClick={() => setPreviewDialog(slot)}
+            >
+              <img
+                src={previews[slot]}
+                alt={`Preview ${slot}`}
+                className="w-full h-48 object-contain rounded-lg border transition-opacity group-hover:opacity-80"
+              />
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="bg-black/50 rounded-full p-3">
+                  <Eye className="h-6 w-6 text-white" aria-hidden="true" />
+                </div>
+              </div>
+            </div>
             <Button
               size="sm"
               variant="destructive"
-              className="absolute top-2 right-2"
-              onClick={() => removeFile(slot)}
+              className="absolute top-2 right-2 z-10"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeFile(slot);
+              }}
+              aria-label={`Remove ${label}`}
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
             <p className="text-sm text-muted-foreground mt-2 truncate">
               {files[slot]?.name}
@@ -494,7 +531,7 @@ export default function UploadPage() {
         <div className="mb-8">
           <Button variant="ghost" asChild className="mb-4">
             <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
               Back to Home
             </Link>
           </Button>
@@ -516,7 +553,7 @@ export default function UploadPage() {
             <Card className="mb-6 border-l-4 border-l-blue-500">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-blue-600" />
+                  <Clock className="h-5 w-5 text-blue-600" aria-hidden="true" />
                   {timeline.title || 'Timeline Comparison'}
                 </CardTitle>
                 <CardDescription>
@@ -542,7 +579,7 @@ export default function UploadPage() {
                     </div>
                   );})}
                   <div className="flex-shrink-0 flex items-center justify-center w-20 h-12 border-2 border-dashed border-primary/50 rounded bg-primary/5">
-                    <Plus className="h-6 w-6 text-primary" />
+                    <Plus className="h-6 w-6 text-primary" aria-hidden="true" />
                   </div>
                 </div>
               </CardContent>
@@ -564,12 +601,20 @@ export default function UploadPage() {
           {isTimelineMode ? (
             <div className="space-y-4">
               {isComparing && progressStatus && (
-                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <div className="flex items-center justify-center gap-2 text-blue-700 dark:text-blue-300">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm font-medium">{progressStatus}</span>
-                  </div>
-                </div>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium">{progressStatus}</span>
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+                      </div>
+                      <Progress value={33} className="h-2" aria-label="Upload progress" />
+                      <p className="text-xs text-muted-foreground text-center">
+                        This may take up to 90 seconds for large images
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
               <div className="flex gap-3 justify-center">
@@ -585,7 +630,7 @@ export default function UploadPage() {
                     </>
                   ) : (
                     <>
-                      <Plus className="mr-2 h-4 w-4" />
+                      <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
                       Add to Timeline
                     </>
                   )}
@@ -615,13 +660,34 @@ export default function UploadPage() {
                 </>
               ) : (
                 <>
-                  <Upload className="mr-2 h-4 w-4" />
+                  <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
                   Compare Screenshots
                 </>
               )}
             </Button>
           )}
         </div>
+
+        {/* Image Preview Dialog */}
+        <Dialog open={previewDialog !== null} onOpenChange={(open) => !open && setPreviewDialog(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {previewDialog === 'a'
+                  ? (isTimelineMode ? 'Next Screenshot' : 'Screenshot A (Before)')
+                  : 'Screenshot B (After)'}
+                {previewDialog && files[previewDialog] && ` - ${files[previewDialog]?.name}`}
+              </DialogTitle>
+            </DialogHeader>
+            {previewDialog && previews[previewDialog] && (
+              <img
+                src={previews[previewDialog]!}
+                alt={`Full preview of ${previewDialog}`}
+                className="w-full h-auto"
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

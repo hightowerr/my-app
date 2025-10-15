@@ -47,6 +47,10 @@ export interface TimelineReport {
   strategicView?: string;
   psychologyInsights?: FormattedInsight[];
   timestamp: string;
+  // Summary-specific fields (only present when type === 'summary')
+  phaseTitle?: string;
+  keyPatterns?: string[];
+  strategicDirection?: string;
 }
 
 export interface TimelineComparison {

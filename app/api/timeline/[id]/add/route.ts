@@ -4,6 +4,9 @@ import { generateObject } from 'ai';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { getProductPsychologyInsights } from '@/lib/retrieval/vectorize';
+import { buildTimelineContinuationPrompt } from '@/components/agents/prompts/timeline-continuation';
+import { generateTimelineSummary, shouldGenerateSummary, getNextSummaryRange, SUMMARY_BATCH_SIZE } from '@/lib/timeline-summary';
+import type { TimelineReport } from '@/lib/types';
 
 const ContinuationComparisonSchema = z.object({
   changes: z.array(z.string()).max(5).describe('Up to 5 key differences between the latest screenshots'),
@@ -28,7 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json();
     console.log('[TIMING] ✓ JSON parsed successfully in', Date.now() - requestStartTime, 'ms');
 
-    const { imageName, imageType, imageData, previousImageData, previousContext, previousScreenshotId } = body;
+    const { imageName, imageType, imageData, previousImageData, previousContext, previousScreenshotId, allReports, screenshotCount } = body;
 
     // Use Content-Length header instead of re-stringifying body (performance optimization)
     // Validate Content-Length is a valid positive integer before parsing
@@ -100,22 +103,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           content: [
             {
               type: 'text',
-              text: `This is a continuation comparison in a timeline series.
-
-Previous context: ${previousContext}
-
-Compare these two screenshots and identify what's NEW in the latest version. Focus on:
-- What changed since the previous screenshot
-- How this continues or diverges from the previous progression
-- Layout changes
-- Content differences (text, images, buttons)
-- Color or styling changes
-- New or removed elements
-- Functionality changes
-
-Provide up to 5 concise bullet points describing the NEW changes, plus:
-1. One line explaining why these changes might matter from a product perspective
-2. A strategic view of how this fits into the overall timeline progression`
+              text: buildTimelineContinuationPrompt(previousContext)
             },
             {
               type: 'image',
@@ -168,6 +156,69 @@ Provide up to 5 concise bullet points describing the NEW changes, plus:
     const reportId = crypto.randomUUID();
     const screenshotId = crypto.randomUUID();
 
+    const continuationReport = {
+      id: reportId,
+      type: 'continuation' as const,
+      fromScreenshotId: previousScreenshotId,
+      toScreenshotId: screenshotId,
+      changes: comparison.changes,
+      implication: comparison.implication,
+      strategicView: comparison.strategicView,
+      // Only include insights if array is non-empty
+      psychologyInsights: psychologyInsights.length > 0 ? psychologyInsights : undefined,
+      timestamp: new Date().toISOString()
+    };
+
+    // Check if we should generate a summary (server-side)
+    let summaryReport = null;
+    if (allReports && Array.isArray(allReports)) {
+      const continuationReports = [...allReports.filter((r: TimelineReport) => r.type === 'continuation' || r.type === 'initial'), continuationReport];
+      const existingSummaries = allReports.filter((r: TimelineReport) => r.type === 'summary');
+
+      console.log(`[TIMELINE_SUMMARY] Debug: allReports.length=${allReports.length}, continuationReports.length=${continuationReports.length}, existingSummaries.length=${existingSummaries.length}`);
+      console.log(`[TIMELINE_SUMMARY] Debug: shouldGenerateSummary(${continuationReports.length}, ${existingSummaries.length}) = ${shouldGenerateSummary(continuationReports.length, existingSummaries.length)}`);
+
+      if (shouldGenerateSummary(continuationReports.length, existingSummaries.length)) {
+        console.log(`[TIMELINE_SUMMARY] Should generate summary. Total reports: ${continuationReports.length}, existing summaries: ${existingSummaries.length}`);
+
+        try {
+          const summaryRange = getNextSummaryRange(continuationReports.length, existingSummaries.length);
+          if (summaryRange) {
+            console.log(`[TIMELINE_SUMMARY] Generating summary for reports ${summaryRange.startIndex}-${summaryRange.endIndex}`);
+            const reportsToSummarize = continuationReports.slice(summaryRange.startIndex, summaryRange.endIndex + 1);
+            const summary = await generateTimelineSummary(reportsToSummarize, summaryRange.startIndex, summaryRange.endIndex);
+
+            // The summary should link to the screenshot at summaryRange.endIndex
+            // We need to figure out which screenshot ID that is
+            // If we're at the 5th report (endIndex=4), that's the 5th screenshot (current one)
+            // The client will have screenshotCount screenshots BEFORE adding this one
+            // So if screenshotCount=4, this new screenshot (screenshotId) is the 5th one
+            // summaryRange.endIndex is 0-based report index, screenshotCount is current count before adding
+            const isCurrentScreenshot = summaryRange.endIndex === screenshotCount;
+            const summaryScreenshotId = isCurrentScreenshot ? screenshotId : continuationReports[summaryRange.endIndex]?.toScreenshotId;
+
+            summaryReport = {
+              id: `summary-${crypto.randomUUID()}`,
+              type: 'summary' as const,
+              toScreenshotId: summaryScreenshotId || screenshotId, // Link to the 5th, 10th, etc. screenshot
+              changes: summary.changes,
+              implication: `Phase summary: ${summary.phaseTitle}`,
+              strategicView: summary.strategicDirection,
+              phaseTitle: summary.phaseTitle,
+              keyPatterns: summary.keyPatterns,
+              strategicDirection: summary.strategicDirection,
+              timestamp: new Date().toISOString()
+            };
+
+            console.log('[TIMELINE_SUMMARY] Summary generated:', summary.phaseTitle);
+          }
+        } catch (summaryError) {
+          console.error('[TIMELINE_SUMMARY] Failed to generate summary:', summaryError);
+          // Continue without summary - it's optional
+        }
+      }
+    }
+
     const result = {
       timelineId,
       screenshot: {
@@ -177,18 +228,8 @@ Provide up to 5 concise bullet points describing the NEW changes, plus:
         type: imageType,
         data: imageBase64
       },
-      report: {
-        id: reportId,
-        type: 'continuation' as const,
-        fromScreenshotId: previousScreenshotId,
-        toScreenshotId: screenshotId,
-        changes: comparison.changes,
-        implication: comparison.implication,
-        strategicView: comparison.strategicView,
-        // Only include insights if array is non-empty
-        psychologyInsights: psychologyInsights.length > 0 ? psychologyInsights : undefined,
-        timestamp: new Date().toISOString()
-      }
+      report: continuationReport,
+      summaryReport // Will be null if no summary needed
     };
 
     console.log('[TIMING] Timeline addition result prepared, total elapsed:', Date.now() - requestStartTime, 'ms');

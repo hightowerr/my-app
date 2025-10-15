@@ -102,11 +102,13 @@ pnpm build        # Production build
 
 ### Architecture Highlights
 
-- **Three-step RAG pipeline**: Vectorize retrieval → GPT-4o-mini synthesis → validation filter
+- **Advanced RAG pipeline**: Query generation (hybrid or semantic) → Vectorize retrieval → LLM re-ranking → GPT-4o-mini synthesis → validation filter
+- **Hierarchical timeline summaries**: Auto-generate phase summaries every 5 screenshots to maintain big-picture view
+- **Hybrid search**: Combines semantic + keyword queries in parallel for better retrieval diversity (enable with `ENABLE_HYBRID_SEARCH=true`)
 - **Automatic image compression**: ~400KB per screenshot using HTML5 Canvas API
 - **Smart localStorage management**: Auto-cleanup of oldest data when approaching quota
 - **Type-safe**: Zod schemas for AI responses, strict TypeScript throughout
-- **Graceful degradation**: Psychology insights are optional (fail gracefully if Vectorize unavailable)
+- **Graceful degradation**: Psychology insights and summaries are optional (fail gracefully if Vectorize unavailable)
 
 ## Success Metrics
 

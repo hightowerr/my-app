@@ -5,7 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Upload, Plus, ChevronLeft, ChevronRight, History, Clock } from "lucide-react";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ArrowLeft, Upload, Plus, ChevronLeft, ChevronRight, History, Clock, BarChart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TimelineComparison } from "@/lib/types";
 import { TimelineStorage } from "@/lib/timeline-storage";
@@ -38,13 +40,27 @@ export default function TimelinePage() {
     router.push(uploadUrl);
   };
 
-  const getCurrentReport = () => {
-    if (!timeline || selectedScreenshotIndex === 0) return null;
+  const getCurrentReports = () => {
+    if (!timeline || selectedScreenshotIndex === 0) return [];
 
     const currentScreenshot = timeline.screenshots[selectedScreenshotIndex];
-    return timeline.reports.find(report =>
+    const reports = timeline.reports.filter(report =>
       report.toScreenshotId === currentScreenshot.id
     );
+
+    // Debug logging
+    console.log('[TIMELINE_VIEW] Debug:', {
+      selectedIndex: selectedScreenshotIndex,
+      screenshotId: currentScreenshot.id,
+      foundReports: reports.map(r => `${r.type} (${r.id})`),
+      allReports: timeline.reports.map(r => ({
+        type: r.type,
+        toScreenshotId: r.toScreenshotId,
+        phaseTitle: r.phaseTitle
+      }))
+    });
+
+    return reports;
   };
 
   if (loading) {
@@ -72,7 +88,7 @@ export default function TimelinePage() {
   }
 
   const currentScreenshot = timeline.screenshots[selectedScreenshotIndex];
-  const currentReport = getCurrentReport();
+  const currentReports = getCurrentReports();
 
   // Handle both full data URLs and base64-only data for main screenshot
   const mainImageSrc = currentScreenshot.data.startsWith('data:')
@@ -85,7 +101,7 @@ export default function TimelinePage() {
         <div className="mb-8">
           <Button variant="ghost" asChild className="mb-4">
             <Link href="/history">
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
               Back to History
             </Link>
           </Button>
@@ -100,7 +116,7 @@ export default function TimelinePage() {
               </p>
             </div>
             <Button onClick={handleAddScreenshot}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
               Add Screenshot
             </Button>
           </div>
@@ -110,7 +126,7 @@ export default function TimelinePage() {
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
+              <Clock className="h-5 w-5" aria-hidden="true" />
               Timeline Navigation
             </CardTitle>
             <CardDescription>
@@ -118,8 +134,9 @@ export default function TimelinePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-4 overflow-x-auto pb-4">
-              {timeline.screenshots.map((screenshot, index) => {
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="flex gap-4 pb-4">
+                {timeline.screenshots.map((screenshot, index) => {
                 // Debug: log the first 100 chars of screenshot data
                 console.log(`[DEBUG] Screenshot ${index + 1} data prefix:`, screenshot.data.substring(0, 100));
                 console.log(`[DEBUG] Screenshot ${index + 1} type:`, screenshot.type);
@@ -159,20 +176,27 @@ export default function TimelinePage() {
                   </p>
                 </div>
               );
-              })}
-            </div>
+                })}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
 
             {/* Navigation Controls */}
-            <div className="flex justify-center gap-2 mt-4">
+            <div className="flex items-center justify-between mt-4">
               <Button
                 variant="outline"
                 size="sm"
                 disabled={selectedScreenshotIndex === 0}
                 onClick={() => setSelectedScreenshotIndex(prev => Math.max(0, prev - 1))}
               >
-                <ChevronLeft className="h-4 w-4 mr-1" />
+                <ChevronLeft className="h-4 w-4 mr-1" aria-hidden="true" />
                 Previous
               </Button>
+
+              <div className="text-sm text-muted-foreground" role="status" aria-live="polite">
+                {selectedScreenshotIndex + 1} of {timeline.screenshots.length}
+              </div>
+
               <Button
                 variant="outline"
                 size="sm"
@@ -180,7 +204,7 @@ export default function TimelinePage() {
                 onClick={() => setSelectedScreenshotIndex(prev => Math.min(timeline.screenshots.length - 1, prev + 1))}
               >
                 Next
-                <ChevronRight className="h-4 w-4 ml-1" />
+                <ChevronRight className="h-4 w-4 ml-1" aria-hidden="true" />
               </Button>
             </div>
           </CardContent>
@@ -205,18 +229,34 @@ export default function TimelinePage() {
           </CardContent>
         </Card>
 
-        {/* Comparison Report */}
-        {currentReport && (
-          <Card className="mb-8">
+        {/* Comparison Reports - can have multiple reports per screenshot */}
+        {currentReports.map((currentReport) => (
+          <Card key={currentReport.id} className="mb-8">
             <CardHeader>
               <CardTitle>
-                {currentReport.type === 'initial' ? 'Initial Comparison' : 'Changes from Previous'}
+                {currentReport.type === 'summary' ? '📊 Phase Summary' :
+                 currentReport.type === 'initial' ? 'Initial Comparison' : 'Changes from Previous'}
               </CardTitle>
               <CardDescription>
-                AI-generated analysis • {new Date(currentReport.timestamp).toLocaleString()}
+                {currentReport.type === 'summary'
+                  ? `Summary of steps ${timeline.reports.filter(r => r.type === 'continuation' || r.type === 'initial').findIndex(r => r.id === currentReport.id) + 1}`
+                  : `AI-generated analysis • ${new Date(currentReport.timestamp).toLocaleString()}`
+                }
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {currentReport.type === 'summary' && (
+                <Alert className="border-purple-500 bg-purple-50 dark:bg-purple-950/20">
+                  <BarChart className="h-4 w-4 text-purple-600" aria-hidden="true" />
+                  <AlertTitle className="text-purple-900 dark:text-purple-100">
+                    Phase Summary Report
+                  </AlertTitle>
+                  <AlertDescription className="text-purple-800 dark:text-purple-200">
+                    This report synthesizes patterns from the last 5 screenshots in your timeline.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div>
                 <h3 className="font-semibold mb-3">Changes:</h3>
                 <ul className="space-y-2">
@@ -236,9 +276,32 @@ export default function TimelinePage() {
                 </p>
               </div>
 
+              {currentReport.type === 'summary' && currentReport.phaseTitle && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-1">Phase Title</h3>
+                  <p className="text-xl font-semibold text-purple-700 dark:text-purple-300">
+                    {currentReport.phaseTitle}
+                  </p>
+                </div>
+              )}
+
+              {currentReport.type === 'summary' && currentReport.keyPatterns && currentReport.keyPatterns.length > 0 && (
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold mb-3">Key Patterns</h3>
+                  <ul className="space-y-2">
+                    {currentReport.keyPatterns.map((pattern, index) => (
+                      <li key={index} className="flex items-start gap-2 bg-purple-50 dark:bg-purple-950/20 p-2 rounded border border-purple-200 dark:border-purple-800">
+                        <span className="inline-block w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0"></span>
+                        <span className="text-sm">{pattern}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {currentReport.strategicView && (
                 <div className="border-t pt-4">
-                  <h3 className="font-semibold mb-2">Strategic View</h3>
+                  <h3 className="font-semibold mb-2">{currentReport.type === 'summary' ? 'Strategic Direction' : 'Strategic View'}</h3>
                   <p className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
                     {currentReport.strategicView}
                   </p>
@@ -277,17 +340,17 @@ export default function TimelinePage() {
               )}
             </CardContent>
           </Card>
-        )}
+        ))}
 
         {/* Actions */}
         <div className="flex gap-4 justify-center">
           <Button onClick={handleAddScreenshot}>
-            <Upload className="mr-2 h-4 w-4" />
+            <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
             Add Next Screenshot
           </Button>
           <Button variant="outline" asChild>
             <Link href="/history">
-              <History className="mr-2 h-4 w-4" />
+              <History className="mr-2 h-4 w-4" aria-hidden="true" />
               View All Timelines
             </Link>
           </Button>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Upload, Eye, ThumbsUp, ThumbsDown, Clock, Play } from "lucide-react";
 
 import { StorageItem, isTimelineComparison, isComparisonResult } from "@/lib/types";
@@ -25,10 +26,32 @@ export default function HistoryPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading history...</p>
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <Skeleton className="h-8 w-48 mb-4" />
+          <Skeleton className="h-12 w-full mb-6" />
+          <div className="grid gap-6">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-6 w-64 mb-2" />
+                  <Skeleton className="h-4 w-96" />
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Skeleton className="w-full h-20 rounded" />
+                      <Skeleton className="w-full h-20 rounded" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Skeleton className="h-4 w-full mb-2" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -40,7 +63,7 @@ export default function HistoryPage() {
         <div className="mb-8">
           <Button variant="ghost" asChild className="mb-4">
             <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
               Back to Home
             </Link>
           </Button>
@@ -51,7 +74,7 @@ export default function HistoryPage() {
             </h1>
             <Button asChild>
               <Link href="/upload">
-                <Upload className="mr-2 h-4 w-4" />
+                <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
                 New Comparison
               </Link>
             </Button>
@@ -64,14 +87,14 @@ export default function HistoryPage() {
         {items.length === 0 ? (
           <Card>
             <CardContent className="text-center py-12">
-              <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" aria-hidden="true" />
               <h3 className="text-lg font-semibold mb-2">No comparisons yet</h3>
               <p className="text-muted-foreground mb-4">
                 Upload your first set of screenshots to get started.
               </p>
               <Button asChild>
                 <Link href="/upload">
-                  <Upload className="mr-2 h-4 w-4" />
+                  <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
                   Upload Screenshots
                 </Link>
               </Button>
@@ -87,7 +110,7 @@ export default function HistoryPage() {
                       <div className="flex justify-between items-start">
                         <div>
                           <CardTitle className="text-lg flex items-center gap-2">
-                            <Clock className="h-5 w-5 text-blue-600" />
+                            <Clock className="h-5 w-5 text-blue-600" aria-hidden="true" />
                             {item.title || 'Timeline Comparison'}
                           </CardTitle>
                           <CardDescription>
@@ -97,7 +120,7 @@ export default function HistoryPage() {
                         <div className="flex items-center gap-2">
                           <Button asChild size="sm">
                             <Link href={`/timeline/${item.id}`}>
-                              <Play className="mr-2 h-4 w-4" />
+                              <Play className="mr-2 h-4 w-4" aria-hidden="true" />
                               View Timeline
                             </Link>
                           </Button>
@@ -167,17 +190,17 @@ export default function HistoryPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           {item.feedback && (
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground" aria-label={`Feedback: ${item.feedback}`}>
                               {item.feedback === 'useful' ? (
-                                <ThumbsUp className="h-4 w-4 text-green-600" />
+                                <ThumbsUp className="h-4 w-4 text-green-600" aria-hidden="true" />
                               ) : (
-                                <ThumbsDown className="h-4 w-4 text-red-600" />
+                                <ThumbsDown className="h-4 w-4 text-red-600" aria-hidden="true" />
                               )}
                             </div>
                           )}
                           <Button asChild size="sm">
                             <Link href={`/report/${item.id}`}>
-                              <Eye className="mr-2 h-4 w-4" />
+                              <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
                               View Report
                             </Link>
                           </Button>
